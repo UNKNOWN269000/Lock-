@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lock Access Interface</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap');
+
+  body {
+    margin: 0;
+    background-color: #0b111b;
+    color: #9aaabb;
+    font-family: 'Orbitron', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    user-select: none;
+  }
+
+  .container {
+    background-color: #0c141e;
+    border: 2px solid #254060;
+    border-radius: 15px;
+    padding: 30px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 0 40px #142d4c;
+  }
+
+  .title {
+    font-size: 2rem;
+    letter-spacing: 0.15em;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 1rem;
+    color: #334a71;
+    text-align: center;
+    margin-bottom: 30px;
+  }
+
+  .lock-panel {
+    background: linear-gradient(270deg, #112738, #001119);
+    border: 1px solid #113358;
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+  }
+
+  .input-group {
+    display: flex;
+    align-items: center;
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+    color: #f25a4b;
+  }
+
+  .input-group input[type="text"] {
+    flex-grow: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.1rem;
+    color: #f25a4b;
+    border-bottom: 1px solid #f25a4b;
+    padding: 5px 8px;
+  }
+
+  .input-label {
+    background-color: #4c2f2a;
+    padding: 5px 8px;
+    border-radius: 3px;
+    margin-right: 8px;
+    font-weight: bold;
+  }
+
+  .status {
+    text-align: center;
+    font-size: 1rem;
+    margin-top: 10px;
+    min-height: 24px;
+    color: #778899;
+  }
+
+  .status.granted {
+    color: #4cdfa1;
+    font-weight: bold;
+    animation: flicker 1.5s infinite;
+  }
+
+  @keyframes flicker {
+    0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+      text-shadow: 0 0 4px #4cdfa1, 0 0 10px #4cdfa1, 0 0 20px #2fa86c;
+    }
+    20%, 24%, 55% {
+      text-shadow: none;
+    }
+  }
+
+  .btn-lock {
+    width: 100%;
+    padding: 10px 0;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    background-color: #123b63;
+    color: #a9c4eb;
+    border: 1px solid #4573b1;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    user-select: none;
+  }
+
+  .btn-lock:disabled {
+    color: #44556f;
+    background-color: #223148;
+    border-color: #223148;
+    cursor: not-allowed;
+  }
+
+  .coded-inputs {
+    margin-top: 25px;
+    color: #667799;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Courier New', Courier, monospace;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="title">LOCK ACCESS</div>
+    <div class="subtitle">ESTABLISHING COMMUNICATION</div>
+
+    <div class="lock-panel" aria-label="Lock Access Panel">
+      <div class="input-group">
+        <div class="input-label" aria-label="Reference Number">REF: 3</div>
+        <input type="text" id="codeInput" maxlength="8" autocomplete="off" aria-describedby="codeDesc" placeholder="Enter 8-digit code" />
+        <div style="width:35px; margin-left:5px; color:#9aaabb;">IP</div>
+      </div>
+      <div id="codeDesc" class="status" aria-live="polite"></div>
+
+      <button id="lockButton" class="btn-lock" type="button" aria-pressed="false">LOCK</button>
+
+      <div class="coded-inputs" aria-label="Coded Inputs Info">
+        <span>60 ENCODED (TRUE)</span>
+        <span style="color:#f25a4b;">78</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  const codeInput = document.getElementById('codeInput');
+  const lockButton = document.getElementById('lockButton');
+  const status = document.getElementById('codeDesc');
+  let locked = false;
+
+  lockButton.addEventListener('click', async () => {
+    if (!locked) {
+      const inputVal = codeInput.value.trim();
+      if (inputVal === '') {
+        status.textContent = 'Input code is required.';
+        status.style.color = '#f25a4b';
+        return;
+      }
+
+      // Send code to backend
+      try {
+        const response = await fetch('/check-passcode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passcode: inputVal })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          status.textContent = 'ACCESS GRANTED. COMMUNICATION ESTABLISHED.';
+          status.style.color = '#4cdfa1';
+          locked = true;
+          lockButton.textContent = 'UNLOCK';
+          codeInput.disabled = true;
+        } else {
+          status.textContent = 'INVALID CODE. ACCESS DENIED.';
+          status.style.color = '#f25a4b';
+        }
+      } catch (err) {
+        status.textContent = 'Server error.';
+        status.style.color = '#f25a4b';
+      }
+
+    } else {
+      locked = false;
+      status.textContent = 'LOCK DISENGAGED. INPUT ENABLED.';
+      status.style.color = '#aaa';
+      lockButton.textContent = 'LOCK';
+      codeInput.disabled = false;
+      codeInput.value = '';
+      codeInput.focus();
+    }
+  });
+</script>
+
+</body>
+</html>

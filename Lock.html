@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Locked Showcase</title>
+  <style>
+    :root{
+      --accent:#00e5ff;
+      --accent-2:#8a2be2;
+      --bg-blur:6px; /* background blur when locked */
+      --pin-length:8;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color:#e6f7ff;
+      background:#05060a url("") center/cover no-repeat fixed; /* you can paste an image URL between the quotes */
+    }
+
+    /* Subtle animated scanlines for a hi‑tech vibe */
+    body::before{
+      content:"";
+      position:fixed; inset:0;
+      background: repeating-linear-gradient(
+        to bottom, rgba(255,255,255,.03), rgba(255,255,255,.03) 1px,
+        transparent 1px, transparent 3px
+      );
+      pointer-events:none;
+      mix-blend-mode:overlay;
+      animation: flicker 6s infinite steps(100);
+    }
+    @keyframes flicker{50%{opacity:.8} 51%{opacity:.9} 52%{opacity:.7}}
+
+    /* ======= MAIN CONTENT (revealed after unlock) ======= */
+    .app{
+      height:100%;
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      backdrop-filter: none;
+      transition: filter .4s ease;
+    }
+    .header{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 24px; border-bottom:1px solid rgba(255,255,255,.15);
+      background:linear-gradient(90deg, rgba(0,0,0,.45), rgba(0,0,0,.15));
+    }
+    .brand{font-weight:700; letter-spacing:.12em; text-transform:uppercase}
+    .brand .dot{color:var(--accent)}
+    .status{
+      display:flex; gap:16px; align-items:center; font-size:14px;
+    }
+    .pill{padding:6px 10px; border:1px solid rgba(255,255,255,.2); border-radius:999px}
+    
+
+    .content{
+      display:grid; place-items:center; padding:32px;
+    }
+    .card{
+      width:min(960px, 100%);
+      border:1px solid rgba(255,255,255,.15);
+      background:linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.25));
+      border-radius:20px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+
+    /* ======= LOCK OVERLAY ======= */
+    .lock-overlay{
+      position:fixed; inset:0; display:grid; grid-template-columns:1fr min(420px, 90vw);
+      background:radial-gradient(1200px 800px at 10% 10%, rgba(138,43,226,.18), transparent),
+                 radial-gradient(1200px 800px at 100% 100%, rgba(0,229,255,.18), transparent),
+                 rgba(2,6,23,.85);
+      backdrop-filter: blur(var(--bg-blur));
+      transition: opacity .35s ease, visibility .35s ease;
+      z-index:9999;
+    }
+    .lock-overlay.hidden{opacity:0; visibility:hidden}
+
+    .lock-left{
+      position:relative; overflow:hidden;
+    }
+    .lock-left::after{
+      content:""; position:absolute; inset:0; background:
+        radial-gradient(1000px 600px at 30% 30%, rgba(0,229,255,.07), transparent),
+        radial-gradient(1000px 600px at 70% 70%, rgba(138,43,226,.07), transparent);
+      pointer-events:none;
+    }
+
+    .lock-panel{
+      display:flex; flex-direction:column; gap:16px;
+      padding:28px; border-left:1px solid rgba(255,255,255,.12);
+      background:linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.25));
+    }
+
+    .lock-title{font-size:22px; letter-spacing:.08em; text-transform:uppercase}
+    .lock-sub{opacity:.75}
+
+    .pin-display{
+      display:flex; gap:10px; margin:10px 0 6px; align-items:center;
+    }
+    .dot{
+      width:14px; height:14px; border-radius:50%; border:1px solid rgba(255,255,255,.35);
+      box-shadow: inset 0 0 8px rgba(0,229,255,.35);
+      background: rgba(0,0,0,.2);
+    }
+    .dot.filled{background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent-2)); box-shadow:0 0 12px var(--accent)}
+
+    .keypad{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:6px}
+    .key{
+      user-select:none; cursor:pointer; font-size:18px; font-weight:700;
+      border:1px solid rgba(255,255,255,.25); border-radius:16px; padding:14px 0;
+      text-align:center; background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      box-shadow: inset 0 0 12px rgba(0,229,255,.12);
+      transition: transform .04s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .key:active{ transform:translateY(1px); box-shadow: inset 0 0 18px rgba(0,229,255,.35); border-color: rgba(0,229,255,.6) }
+    .key[disabled]{opacity:.45; pointer-events:none}
+
+    .row{display:flex; gap:10px}
+    .info{font-size:13px; opacity:.7; display:flex; justify-content:space-between}
+    .error{ color:#ff6b6b; min-height:1.2em }
+    .ok{ color:#7CFC00 }
+
+    .toolbar{ display:flex; gap:8px; margin-top:10px }
+    .btn{
+      border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:8px 12px; font-size:12px;
+      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      cursor:pointer
+    }
+    /* ===== MOBILE FRIENDLY FIXES ===== */
+@media (max-width: 600px) {
+  body {
+    font-size: 14px;
+  }
+
+  .card {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .lock-panel {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .lock-title {
+    font-size: 18px;
+  }
+
+  .pin-display {
+    gap: 6px;
+  }
+  .dot {
+    width: 12px;
+    height: 12px;
+  }
+
+  .keypad {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  /* Neon Blue Keypad Buttons */
+.key {
+  user-select: none;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 700;
+  border: 1px solid rgba(0,229,255,.6);
+  border-radius: 16px;
+  padding: 14px 0;
+  text-align: center;
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.08);
+  box-shadow: 
+    0 0 6px #00e5ff,
+    0 0 12px #00e5ff,
+    inset 0 0 8px rgba(0,229,255,.4);
+  transition: transform 0.1s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+/* Active (when pressed) */
+.key:active {
+  transform: scale(0.96);
+  box-shadow: 
+    0 0 12px #00e5ff,
+    0 0 24px #00e5ff,
+    inset 0 0 14px rgba(0,229,255,.8);
+  border-color: #00e5ff;
+}
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-4px); }
+  100% { transform: translateX(0); }
+}
+
+.lock-panel.shake {
+  animation: shake 0.35s ease;
+}
+
+
+
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  .btn {
+    flex: 1;
+    text-align: center;
+  }
+  .neon-bg{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  overflow:hidden;
+}
+
+.neon-bg::before, .neon-bg::after{
+  content:"";
+  position:absolute;
+  border-radius:50%;
+  width:200px;
+  height:200px;
+  top:50%;
+  left:50%;
+  transform:translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(0,229,255,0.25), transparent 70%);
+  animation: neonPulse 3s infinite alternate;
+}
+
+.neon-bg::after{
+  width:150px;
+  height:150px;
+  background: radial-gradient(circle, rgba(138,43,226,0.3), transparent 70%);
+  animation: neonPulse 4s infinite alternate-reverse;
+}
+
+@keyframes neonPulse{
+  0% { transform: translate(-50%, -50%) scale(0.9); opacity:0.6; }
+  50%{ transform: translate(-50%, -50%) scale(1.1); opacity:0.9; }
+  100%{ transform: translate(-50%, -50%) scale(0.95); opacity:0.7; }
+}
+##access-granted {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  text-align: center;
+  color: #00ffea;
+  font-family: monospace;
+  font-size: 2.4rem;
+  letter-spacing: 0.2em;
+  background: rgba(0,0,0,0.85);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10010;
+  transition: opacity 0.5s ease;
+}
+#access-granted { position: fixed; inset: 0; }
+
+
+#access-granted.show {
+  opacity: 1;
+}
+
+/* Neon text pulse */
+#access-granted .text {
+  font-size: clamp(1.5rem, 4vw, 2.4rem); /* adapts to screen size */
+  text-shadow:
+    0 0 8px #00ffe0,
+    0 0 16px #00ffe0,
+    0 0 24px #00ffe0,
+    0 0 32px #00e5ff;
+  animation: neonPulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes neonPulse {
+  0% { text-shadow: 0 0 6px #00ffe0, 0 0 12px #00ffe0; }
+  50% { text-shadow: 0 0 12px #00ffe0, 0 0 24px #00ffe0; }
+  100% { text-shadow: 0 0 16px #00ffe0, 0 0 32px #00ffe0; }
+}
+
+/* Moving scanline */
+#access-granted .scanline {
+  width: 80%;
+  height: 2px;
+  margin-top: 10px;
+  background: linear-gradient(90deg, transparent, #00e5ff, transparent);
+  animation: scanline 1s linear infinite;
+}
+@keyframes scanline {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Neon particle sparks */
+#access-granted .particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+#access-granted .particles::before,
+#access-granted .particles::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #00ffe0;
+  border-radius: 50%;
+  box-shadow: 
+    50px 20px #00ffe0,
+    150px 80px #00e5ff,
+    220px 50px #00ffe0,
+    300px 100px #00e5ff,
+    400px 40px #00ffe0;
+  animation: sparkMove 1.5s linear infinite;
+}
+
+#access-granted .particles::after {
+  background: #8a2be2;
+  box-shadow: 
+    30px 70px #8a2be2,
+    120px 40px #8a2be2,
+    200px 90px #8a2be2,
+    280px 60px #8a2be2,
+    350px 100px #8a2be2;
+  animation-delay: 0.75s;
+}
+
+
+span {
+  width: 4px;
+  height: 4px;
+  transform: translateX(0) translateY(0);
+}
+@keyframes sparkMove {
+  0% { transform: translateY(0) translateX(0); opacity:1; }
+  50% { transform: translateY(-20px) translateX(10px); opacity:0.6; }
+  100% { transform: translateY(-40px) translateX(20px); opacity:0; }
+}
+
+
+
+
+
+}
+
+
+    /* Responsive: on narrow screens the left visual collapses */
+    @media (max-width:900px){
+      .lock-overlay{ grid-template-columns:1fr }
+      .lock-left{ display:none }
+    }
+  </style>
+</head>
+<body>
+ 
+
+  <div class="app" id="app">
+    <header class="header">
+      <div class="brand">NEON<span class="dot">·</span>NODE</div>
+      <div class="status">
+        <div class="pill">Session <span id="session-id">–</span></div>
+        <div class="pill">System Time: <span id="system-time">--:--</span></div>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="card">
+        <h2 style="margin:0 0 8px">Your Showcase Area</h2>
+        <p style="opacity:.75; margin:0 0 18px">This content unlocks after the correct PIN. Drop in your image using the button below or set it in CSS.</p>
+        <div class="toolbar">
+          <input type="file" id="bgUpload" accept="image/*" class="btn" />
+          <button class="btn" id="clearBg">Clear Background</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="header" style="border-top:1px solid rgba(255,255,255,.15); border-bottom:none">
+      <div class="pill">© <span id="year"></span> NeonNode</div>
+      <div class="pill">Locked site demo</div>
+    </footer>
+  </div>
+
+  <!-- LOCK OVERLAY (Keypad on the RIGHT like you asked before) -->
+  <div class="lock-overlay" id="lock">
+    <div class="lock-left">
+      <!-- Decorative grid -->
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; opacity:.25">
+        <defs>
+          <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M0 10H10 M10 0V10" stroke="url(#grad)" stroke-width="0.3"/>
+          </pattern>
+          <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="white" stop-opacity=".4"/>
+            <stop offset="100%" stop-color="white" stop-opacity=".05"/>
+          </linearGradient>
+        </defs>
+        <rect x="0" y="0" width="100" height="100" fill="url(#grid)"/>
+      </svg>
+    </div>
+    <aside class="lock-panel" aria-label="Unlock panel">
+  <div class="lock-title">Enter Access PIN</div>
+  <div class="lock-sub">Security level: <span class="ok">GREEN</span></div>
+
+  <div class="pin-display" aria-live="polite" aria-atomic="true">
+  <div class="dot" id="d0"></div>
+  <div class="dot" id="d1"></div>
+  <div class="dot" id="d2"></div>
+  <div class="dot" id="d3"></div>
+  <div class="dot" id="d4"></div>
+  <div class="dot" id="d5"></div>
+  <div class="dot" id="d6"></div>
+  <div class="dot" id="d7"></div>
+</div>
+
+
+  <div class="neon-bg"></div> <!-- NEW neon effect layer -->
+
+  <div class="keypad" role="group" aria-label="PIN keypad">
+    <!-- keypad buttons here -->
+  </div>
+
+
+      <div class="info">
+        <span id="attempts">Attempts left: 3</span>
+        <span id="cooldown"></span>
+      </div>
+      <div class="error" id="error"></div>
+
+      <div class="keypad" role="group" aria-label="PIN keypad">
+        <!-- 1-9 -->
+        <button class="key" data-k="1">1</button>
+        <button class="key" data-k="2">2</button>
+        <button class="key" data-k="3">3</button>
+        <button class="key" data-k="4">4</button>
+        <button class="key" data-k="5">5</button>
+        <button class="key" data-k="6">6</button>
+        <button class="key" data-k="7">7</button>
+        <button class="key" data-k="8">8</button>
+        <button class="key" data-k="9">9</button>
+        <!-- helpers row -->
+        <button class="key" id="back">←</button>
+        <button class="key" data-k="0">0</button>
+        <button class="key" id="enter">⏎</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="clear">Clear</button>
+        <button class="btn" id="help">Hint</button>
+      </div>
+      </div>
+    </aside>
+  </div>
+  <div id="access-granted">
+  <div class="particles"></div>
+  <div class="text">ACCESS GRANTED</div>
+  <div class="scanline"></div>
+</div>
+
+  <script>
+    // ===== CONFIG =====
+    const CORRECT_PIN = "25269000"; // <-- change your PIN here
+    const MAX_ATTEMPTS = 3;      // lockout after 3 total attempts
+    const COOLDOWN_SECONDS = 15; // forced wait after exceeding attempts
+
+    // ===== STATE =====
+    let buffer = "";
+    let attemptsLeft = MAX_ATTEMPTS;
+    let locked = true;
+    let cooldownTimer = null;
+
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+    function updateDots(){
+  const pinLength = 8; // updated
+  for(let i=0;i<pinLength;i++){
+    const dot = document.getElementById("d"+i);
+    if(!dot) continue;
+    dot.classList.toggle('filled', i < buffer.length);
+  }
+}
+
+    
+
+    function setError(msg=""){ $('#error').textContent = msg; }
+
+    function setKeypadDisabled(disabled){
+      $$(".key").forEach(k=> k.disabled = disabled);
+      $("#clear").disabled = disabled;
+      $("#help").disabled = disabled;
+      $("#back").disabled = disabled;
+      $("#enter").disabled = disabled;
+    }
+
+    function speak(text){
+      try { new SpeechSynthesisUtterance; } catch { return; }
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.02; u.pitch = 1; u.volume = .9;
+      speechSynthesis.speak(u);
+    }
+
+    function startCooldown(){
+      let secs = COOLDOWN_SECONDS;
+      setKeypadDisabled(true);
+      $('#cooldown').textContent = `Cooldown: ${secs}s`;
+      setError('Too many attempts. Please wait.');
+      speak('Maximum attempts exceeded. Please wait.');
+      cooldownTimer = setInterval(()=>{
+        secs--; $('#cooldown').textContent = `Cooldown: ${secs}s`;
+        if(secs<=0){ clearInterval(cooldownTimer); $('#cooldown').textContent = '';
+          attemptsLeft = MAX_ATTEMPTS; setKeypadDisabled(false); setError(''); updateAttempts();
+        }
+      }, 1000);
+    }
+
+    function updateAttempts(){
+      $('#attempts').textContent = `Attempts left: ${attemptsLeft}`;
+    }
+
+function checkPin(){
+  if(buffer.length < 8){ setError('Enter 8 digits.'); return; }
+  if(buffer === CORRECT_PIN){
+    unlock();
+  } else {
+    attemptsLeft--; updateAttempts(); setError('Incorrect PIN.');
+    wrongPinFeedback();
+    if(attemptsLeft <= 0){ startCooldown(); }
+    buffer = ""; updateDots();
+  }
+}
+
+
+    function unlock(){
+  if(!locked) return;
+  locked = false;
+
+  $('#lock').classList.add('hidden');
+  setTimeout(()=> $('#lock').style.display = 'none', 350);
+  setError('');
+
+  $('#session-id').textContent = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const now = new Date();
+  now.setHours(Math.floor(Math.random()*24));
+  now.setMinutes(Math.floor(Math.random()*60));
+  $('#system-time').textContent = now.toTimeString().slice(0,5);
+
+  // ===== ACCESS GRANTED ANIMATION =====
+  createNeonParticles(25); // create 25 spark particles
+  const ag = document.getElementById('access-granted');
+  ag.classList.add('show');
+  speak('Access Granted');
+
+  setTimeout(()=> ag.classList.remove('show'), 2500);
+}
+
+// Create neon particles for Access Granted
+function createNeonParticles(count=20){
+  const container = document.querySelector('#access-granted .particles');
+  container.innerHTML = ''; // clear previous particles
+  for(let i=0;i<count;i++){
+    const p = document.createElement('span');
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.top = Math.random() * 100 + 'vh';
+    p.style.animationDuration = (1 + Math.random()*1.5) + 's';
+    p.style.animationDelay = (Math.random()*0.5) + 's';
+    p.style.background = Math.random() > 0.5 ? '#00ffe0' : '#8a2be2';
+    container.appendChild(p);
+  }
+}
+
+
+
+
+    // ===== EVENTS =====
+    $$(".key").forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const k = btn.dataset.k;
+        if(typeof k === 'undefined') return; // non-digit keys
+        if(buffer.length >= 8) return;
+        buffer += k; updateDots();
+      });
+    });
+
+    $('#enter').addEventListener('click', checkPin);
+    $('#back').addEventListener('click', ()=>{ buffer = buffer.slice(0,-1); updateDots(); });
+    $('#clear').addEventListener('click', ()=>{ buffer = ""; updateDots(); setError(''); });
+    $('#help').addEventListener('click', ()=>{ setError('Hint: same as your lorry axle count?'); });
+
+    // Keyboard support
+    window.addEventListener('keydown', (e)=>{
+      if(!locked) return;
+      if(/^[0-9]$/.test(e.key)){
+        if(buffer.length < 8){ buffer += e.key; updateDots(); }
+      } else if(e.key === 'Backspace'){
+        buffer = buffer.slice(0,-1); updateDots();
+      } else if(e.key === 'Enter'){
+        checkPin();
+      }
+    });
+
+    // Background image upload (no server needed)
+    const bgUpload = $('#bgUpload');
+    const clearBg = $('#clearBg');
+    bgUpload.addEventListener('change', async (e)=>{
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        document.body.style.backgroundImage = `url(${reader.result})`;
+      };
+      reader.readAsDataURL(file);
+    });
+    clearBg.addEventListener('click', ()=>{
+      document.body.style.backgroundImage = '';
+    });
+
+    // Footer year
+    $('#year').textContent = new Date().getFullYear();
+    function wrongPinFeedback(){
+  const panel = document.querySelector('.lock-panel');
+  panel.classList.add('shake');
+  setTimeout(()=> panel.classList.remove('shake'), 350);
+  speak('Incorrect PIN!');
+}
+
+
+    // Initialize view
+    updateAttempts(); updateDots();
+  </script>
+  <script></script>
+</body>
+</html>
